@@ -1,0 +1,141 @@
+.app-layout {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 40px 20px;
+  min-height: 100vh;
+}
+
+.main-header {
+  text-align: center;
+  margin-bottom: 60px;
+}
+
+.main-header h1 {
+  font-size: 3rem;
+  margin-bottom: 10px;
+  color: var(--text-h);
+}
+
+.accent {
+  color: var(--accent);
+}
+
+.controls {
+  margin-top: 30px;
+  display: flex;
+  gap: 15px;
+  justify-content: center;
+}
+
+button {
+  padding: 10px 20px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-weight: 500;
+}
+
+button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.btn-active {
+  background: var(--accent-bg);
+  border-color: var(--accent-border);
+  color: var(--accent);
+}
+
+.dashboard {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  gap: 30px;
+}
+
+.posts-container {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 30px;
+  box-shadow: var(--shadow);
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 25px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 15px;
+}
+
+.header h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  color: var(--text-h);
+}
+
+.post-card {
+  padding: 15px;
+  border-radius: 10px;
+  background: var(--social-bg);
+  margin-bottom: 15px;
+  border: 1px solid transparent;
+  transition: transform 0.2s ease;
+}
+
+.post-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent-border);
+}
+
+.post-card h3 {
+  margin: 0 0 8px 0;
+  color: var(--text-h);
+}
+
+.post-card p {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+/* Animations */
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 40px 0;
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid var(--accent-bg);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: rotate 1s linear infinite;
+  margin-bottom: 15px;
+}
+
+.loader-mini {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--accent-bg);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: rotate 1s linear infinite;
+}
+
+@keyframes rotate {
+  to { transform: rotate(360deg); }
+}
+
+.empty-state {
+  text-align: center;
+  padding: 100px 0;
+  color: var(--text);
+  font-style: italic;
+}

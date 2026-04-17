@@ -1,7 +1,12 @@
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
+import { QueryClientProvider, QueryClient } from './lib'
+
+const queryClient = new QueryClient();
 
 createRoot(document.getElementById('root')!).render(
-  <App />
+  <QueryClientProvider client={queryClient}>
+    <App />
+  </QueryClientProvider>
 )
