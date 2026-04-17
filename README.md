@@ -1,100 +1,136 @@
 # React Query from Scratch 🚀
 
-A from-scratch implementation of a powerful state management and data-fetching library, inspired by TanStack Query. This project demonstrates how to handle caching, stale-while-revalidate logic, and cache invalidation using the Observer pattern in React.
+A from-scratch implementation of a powerful state management and data-fetching library. This demonstrates how to build a production-grade coordination layer for async data using the Observer pattern.
 
-## 🏗️ Technical Architecture
+---
 
-### 1. The Core State Machine (`createQuery.ts`)
-Each query is a self-contained state machine that manages its own lifecycle.
+## 🏛️ Library Core Implementation
+
+### 1. The Global Store (`QueryClient.ts`)
+The `QueryClient` acts as the heart of the library. It maintains the cache in a `Map` and provides methods to retrieve or invalidate queries.
+
 ```typescript
-const query = {
-  state: { status: 'pending', data: undefined, ... },
-  fetch: async () => {
-    // 1. Set loading state
-    // 2. Perform async operation
-    // 3. Update state & notify observers
-  },
-  invalidate: () => {
-    // Reset lastUpdated to 0 to force next fetch
-  }
+import { createQuery } from './createQuery';
+import type { Query } from './types';
+
+export class QueryClient {
+    private queries: Map<string, Query> = new Map();
+
+    getQuery = ({ queryKey, queryFn }: { queryKey: unknown[]; queryFn: () => Promise<unknown> }): Query => {
+        const queryHash = JSON.stringify(queryKey);
+        let query = this.queries.get(queryHash);
+
+        if (!query) {
+            query = createQuery({ queryKey, queryFn });
+            this.queries.set(queryHash, query);
+        }
+        return query;
+    };
+
+    invalidateQueries = (queryKey: unknown[]) => {
+        const queryHash = JSON.stringify(queryKey);
+        this.queries.get(queryHash)?.invalidate();
+    };
 }
 ```
 
-### 2. The Central Store (`QueryClient.ts`)
-A singleton-like class that ensures multiple components sharing a `queryKey` talk to the same source of truth.
+### 2. The Query Machine (`createQuery.ts`)
+This is the low-level logic that handles the actual fetching, state updates, and deduplication of requests.
+
 ```typescript
-const queryClient = new QueryClient();
+export const createQuery = ({ queryKey, queryFn }) => {
+    const query = {
+        state: { status: 'pending', isFetching: false, ... },
+        subscribers: [],
+        
+        fetch: async () => {
+            if (query.fetchingPromise) return query.fetchingPromise;
+            query.fetchingPromise = (async () => {
+                query.setState(s => ({ ...s, isFetching: true }));
+                try {
+                    const data = await queryFn();
+                    query.setState(s => ({ ...s, status: 'success', data, lastUpdated: Date.now() }));
+                } catch (error) {
+                    query.setState(s => ({ ...s, status: 'error', error }));
+                } finally {
+                    query.fetchingPromise = null;
+                    query.setState(s => ({ ...s, isFetching: false }));
+                }
+            })();
+            return query.fetchingPromise;
+        },
 
-// Shared cache entry for 'postsData'
-const queryA = queryClient.getQuery({ queryKey: ['postsData'], ... });
-const queryB = queryClient.getQuery({ queryKey: ['postsData'], ... }); 
-
-// queryA === queryB (True! Global state reached)
+        invalidate: () => {
+            query.setState(s => ({ ...s, lastUpdated: 0 }));
+            if (query.subscribers.length > 0) query.fetch();
+        }
+    };
+    return query;
+};
 ```
 
-### 3. The Sync Layer (`useQuery.tsx`)
-The hook that connects the component to the query machine via a subscription.
+### 3. The Hook Observer (`useQuery.tsx`)
+The `useQuery` hook connects React components to the `QueryClient`. It uses `useMemo` for a stable observer and `useEffect` for the subscription lifecycle.
+
 ```typescript
-export const useQuery = ({ queryKey, queryFn, staleTime }) => {
-  const query = queryClient.getQuery({ queryKey, queryFn });
-  const [, rerender] = useState(0);
+export const useQuery = ({ queryKey, queryFn, staleTime = 0 }) => {
+    const queryClient = useQueryClient();
+    const query = queryClient.getQuery({ queryKey, queryFn });
+    const [, setCount] = useState(0);
+    const rerender = useCallback(() => setCount(c => c + 1), []);
 
-  useEffect(() => {
-    // Subscribe and trigger re-render on change
-    const unsubscribe = query.subscribe({
-      notify: () => rerender(c => c + 1),
-      getQueryState: () => query.state
-    });
-    
-    // Auto-fetch if stale
-    return unsubscribe;
-  }, [query]);
+    const observer = useMemo(() => ({
+        notify: rerender,
+        getQueryState: () => query.state,
+    }), [query, rerender]);
 
-  return query.state;
-}
+    useEffect(() => {
+        const unsubscribe = query.subscribe(observer);
+        const isStale = !query.state.lastUpdated || (Date.now() - query.state.lastUpdated > staleTime);
+        if (isStale) query.fetch();
+        return unsubscribe;
+    }, [query, observer, staleTime]);
+
+    return query.state;
+};
 ```
 
-### 4. Mutations (`useMutation.tsx`)
-Triggers side-effects and manages the data-changing lifecycle.
+### 4. Side Effects (`useMutation.tsx`)
+Handles the "Write" part of CRUD. It gives you a `mutate` function and tracks the lifecycle of an async call.
+
 ```typescript
-const { mutate, isPending } = useMutation({
-  mutationFn: createPost,
-  onSuccess: () => {
-    // Tell the client that 'postsData' is now dirty
-    queryClient.invalidateQueries(['postsData']);
-  }
-});
+export const useMutation = ({ mutationFn, onSuccess }) => {
+  const [state, setState] = useState({ status: 'idle', isPending: false, ... });
+
+  const mutate = useCallback(async (variables) => {
+    setState(s => ({ ...s, isPending: true }));
+    try {
+      const data = await mutationFn(variables);
+      setState({ status: 'success', data, isPending: false });
+      if (onSuccess) onSuccess(data);
+    } catch (error) {
+      setState({ status: 'error', error, isPending: false });
+    }
+  }, [mutationFn, onSuccess]);
+
+  return { ...state, mutate };
+};
 ```
 
 ---
 
-## 🛠️ Implementation Workflow
+## 🛠️ Key Features Summary
 
-1.  **Define Types**: Created `QueryState` and `MutationState` interfaces for strict safety.
-2.  **State Management**: Built the standard `QueryClient` and `QueryClientProvider` context.
-3.  **Observers**: Implemented a notification system where queries don't know about UI components, and UI components only listen for "notify" signals.
-4.  **UI Integration**: Modularized the dashboard into reusable components like `PostCard` and `PostList`.
-
----
-
-## 🚀 Roadmap & Pending Features
-
-- [ ] **Optimistic Updates**: Update the UI immediately before the server responds.
-- [ ] **Persistence layer**: Sync the `QueryClient` cache with `localStorage`.
-- [ ] **Window Focus Refetching**: Refresh stale data when returning to the tab.
-- [ ] **Infinite Queries**: Support for paginated data.
-- [ ] **DevTools Integration**: A custom UI to inspect the cache state.
+- **Global Cache**: Data fetched once is shared across all components via the same `queryKey`.
+- **Deduplication**: Simultaneous calls to the same endpoint are funneled into a single network request.
+- **Stale-While-Revalidate**: Data is served from the cache instantly, but refetched in the background if it's older than the `staleTime`.
+- **Cache Invalidation**: Mutations can "poke" the cache to trigger automatic background refreshes.
 
 ---
 
-## 💻 Getting Started
+## 🚀 Roadmap
 
-1. **Install Dependencies**:
-   ```bash
-   npm install
-   ```
-
-2. **Run Development Server**:
-   ```bash
-   npm run dev
-   ```
+- [ ] **Optimistic Updates**: Zero-latency UI updates.
+- [ ] **LocalStorage Sync**: Persistent cache across page reloads.
+- [ ] **Retries**: Automatic exponential backoff for failed requests.
+- [ ] **Window Focus**: Refetch when user returns to the tab.
