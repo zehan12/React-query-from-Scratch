@@ -1,77 +1,82 @@
+import type { Query } from './types';
+
 export const createQuery = ({
     queryKey,
     queryFn,
-}) => {
-    const query = {
+}: {
+    queryKey: unknown[];
+    queryFn: () => Promise<unknown>;
+}): Query => {
+    const query: Query = {
         queryKey,
         queryHash: JSON.stringify(queryKey),
-        fetchingFunction: null,
-        subscribers: [],
         state: {
             status: 'pending',
-            isFetching: true,
+            isFetching: false,
             data: undefined,
             error: undefined,
             lastUpdated: undefined,
         },
+        subscribers: [],
+        fetchingPromise: null,
 
         subscribe: (subscriber) => {
             query.subscribers.push(subscriber);
             return () => {
-                query.subscribers =
-                    query.subscribers.filter(
-                        (s) => s !== subscriber
-                    );
+                query.subscribers = query.subscribers.filter(
+                    (s) => s !== subscriber
+                );
             };
         },
 
         setState: (updater) => {
             query.state = updater(query.state);
-            query.subscribers.forEach((s) =>
-                s.notify()
-            );
+            query.subscribers.forEach((s) => s.notify());
         },
 
         fetch: async () => {
-            if (!query.fetchingFunction) {
-                query.fetchingFunction = async () => {
-                    query.setState((oldState) => {
-                        return {
-                            ...oldState,
-                            isFetching: true,
-                            error: undefined,
-                        };
-                    });
+            if (query.fetchingPromise) return query.fetchingPromise;
 
-                    try {
-                        const data = await queryFn();
-                        query.setState((oldState) => {
-                            return {
-                                ...oldState,
-                                status: 'success',
-                                data,
-                                lastUpdated: Date.now(),
-                            };
-                        });
-                    } catch (error) {
-                        query.setState((oldState) => {
-                            return {
-                                ...oldState,
-                                status: 'error',
-                                error,
-                            };
-                        });
-                    } finally {
-                        query.fetchingFunction = null;
-                        query.setState((oldState) => {
-                            return {
-                                ...oldState,
-                                isFetching: false,
-                            };
-                        });
-                    }
-                };
-                query.fetchingFunction();
+            query.fetchingPromise = (async () => {
+                query.setState((old) => ({
+                    ...old,
+                    isFetching: true,
+                    error: undefined,
+                }));
+
+                try {
+                    const data = await queryFn();
+                    query.setState((old) => ({
+                        ...old,
+                        status: 'success',
+                        data,
+                        lastUpdated: Date.now(),
+                    }));
+                } catch (error) {
+                    query.setState((old) => ({
+                        ...old,
+                        status: 'error',
+                        error,
+                    }));
+                } finally {
+                    query.fetchingPromise = null;
+                    query.setState((old) => ({
+                        ...old,
+                        isFetching: false,
+                    }));
+                }
+            })() as Promise<void>;
+
+            return query.fetchingPromise;
+        },
+
+        invalidate: () => {
+            query.setState((old) => ({
+                ...old,
+                lastUpdated: 0,
+            }));
+            if (query.subscribers.length > 0) {
+                query.fetch();
             }
         },
     };

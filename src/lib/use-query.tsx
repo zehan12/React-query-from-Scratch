@@ -1,66 +1,46 @@
-import {
-    useContext,
-    useState,
-    useRef,
-    useEffect,
-} from 'react';
-
+import { useContext, useState, useMemo, useEffect, useCallback } from 'react';
 import { QueryClientContext } from './QueryClientContext';
-
-const createQueryObserver = (
-    queryClient,
-    { queryKey, queryFn, staleTime = 0 }
-) => {
-    const query = queryClient.getQuery({
-        queryKey,
-        queryFn,
-    });
-
-    const observer = {
-        notify: () => { },
-        subscribe: (rerender) => {
-            const unsubscribe =
-                query.subscribe(observer);
-            observer.notify = rerender;
-            if (
-                !query.state.lastUpdated ||
-                Date.now() - query.state.lastUpdated >
-                staleTime
-            ) {
-                query.fetch();
-            }
-            return unsubscribe;
-        },
-        getQueryState: () => query.state,
-    };
-
-    return observer;
-};
 
 export const useQuery = ({
     queryKey,
     queryFn,
-    staleTime,
+    staleTime = 0,
+}: {
+    queryKey: unknown[];
+    queryFn: () => Promise<unknown>;
+    staleTime?: number;
 }) => {
-    const queryClient = useContext(
-        QueryClientContext
-    );
+    const queryClient = useContext(QueryClientContext);
+    if (!queryClient) {
+        throw new Error('useQuery must be used within a QueryClientProvider');
+    }
 
-    const observer = useRef(
-        createQueryObserver(queryClient, {
-            queryKey,
-            queryFn,
-            staleTime,
-        })
-    );
+    const query = queryClient.getQuery({ queryKey, queryFn });
 
+    // Use state to trigger re-renders
     const [, setCount] = useState(0);
-    const rerender = () => setCount((c) => c + 1);
+    const rerender = useCallback(() => setCount((c) => c + 1), []);
+
+    // Memoize the observer so it's stable per query
+    const observer = useMemo(() => {
+        return {
+            notify: rerender,
+            getQueryState: () => query.state,
+        };
+    }, [query, rerender]);
 
     useEffect(() => {
-        return observer.current.subscribe(rerender);
-    }, []);
+        // Subscribe the observer to the query
+        const unsubscribe = query.subscribe(observer);
 
-    // eslint-disable-next-line react-hooks/refs
-    return observer.current.getQueryState();
+        // Check if data is stale or never fetched
+        const isStale = !query.state.lastUpdated || (Date.now() - query.state.lastUpdated > staleTime);
+        if (isStale) {
+            query.fetch();
+        }
+
+        return unsubscribe;
+    }, [query, observer, staleTime]);
+
+    return query.state;
 };
