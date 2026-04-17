@@ -5,46 +5,85 @@ A from-scratch implementation of a powerful state management and data-fetching l
 ## 🏗️ Technical Architecture
 
 ### 1. The Core State Machine (`createQuery.ts`)
-Each query is a self-contained state machine that manages:
-- **Status**: `pending`, `success`, or `error`.
-- **Caching**: Stores data with a `lastUpdated` timestamp.
-- **Deduplication**: Uses a `fetchingPromise` to prevent multiple simultaneous requests for the same key.
-- **Invalidation**: Provides an `invalidate()` method to force re-fetches.
+Each query is a self-contained state machine that manages its own lifecycle.
+```typescript
+const query = {
+  state: { status: 'pending', data: undefined, ... },
+  fetch: async () => {
+    // 1. Set loading state
+    // 2. Perform async operation
+    // 3. Update state & notify observers
+  },
+  invalidate: () => {
+    // Reset lastUpdated to 0 to force next fetch
+  }
+}
+```
 
 ### 2. The Central Store (`QueryClient.ts`)
-A singleton-like class that manages a `Map` of all queries. It ensures that components requesting the same `queryKey` always receive the exact same query instance, enabling global data sharing.
+A singleton-like class that ensures multiple components sharing a `queryKey` talk to the same source of truth.
+```typescript
+const queryClient = new QueryClient();
+
+// Shared cache entry for 'postsData'
+const queryA = queryClient.getQuery({ queryKey: ['postsData'], ... });
+const queryB = queryClient.getQuery({ queryKey: ['postsData'], ... }); 
+
+// queryA === queryB (True! Global state reached)
+```
 
 ### 3. The Sync Layer (`useQuery.tsx`)
-This hook acts as an **Observer**. It:
-- Subscribes to the query on mount.
-- Triggers a re-render whenever the query state changes.
-- Automatically handles **Stale-Time** logic (only fetches if data is older than the configured `staleTime`).
-- Cleans up subscriptions on unmount to prevent memory leaks.
+The hook that connects the component to the query machine via a subscription.
+```typescript
+export const useQuery = ({ queryKey, queryFn, staleTime }) => {
+  const query = queryClient.getQuery({ queryKey, queryFn });
+  const [, rerender] = useState(0);
+
+  useEffect(() => {
+    // Subscribe and trigger re-render on change
+    const unsubscribe = query.subscribe({
+      notify: () => rerender(c => c + 1),
+      getQueryState: () => query.state
+    });
+    
+    // Auto-fetch if stale
+    return unsubscribe;
+  }, [query]);
+
+  return query.state;
+}
+```
 
 ### 4. Mutations (`useMutation.tsx`)
-A dedicated hook for data-changing operations (POST/DELETE). It manages the `isPending` state and provides an `onSuccess` callback, typically used to call `queryClient.invalidateQueries()`.
+Triggers side-effects and manages the data-changing lifecycle.
+```typescript
+const { mutate, isPending } = useMutation({
+  mutationFn: createPost,
+  onSuccess: () => {
+    // Tell the client that 'postsData' is now dirty
+    queryClient.invalidateQueries(['postsData']);
+  }
+});
+```
 
 ---
 
-## 🛠️ Implementation Details
+## 🛠️ Implementation Workflow
 
-- **Decoupled Architecture**: Logic is split into `services` (API calls), `hooks` (domain logic), and `components` (UI).
-- **Type Safety**: Fully typed with TypeScript interfaces for Queries, Mutations, and Observers.
-- **Aesthetics**: Premium dashboard design using Vanilla CSS with CSS Variables, smooth transitions, and custom loaders.
+1.  **Define Types**: Created `QueryState` and `MutationState` interfaces for strict safety.
+2.  **State Management**: Built the standard `QueryClient` and `QueryClientProvider` context.
+3.  **Observers**: Implemented a notification system where queries don't know about UI components, and UI components only listen for "notify" signals.
+4.  **UI Integration**: Modularized the dashboard into reusable components like `PostCard` and `PostList`.
 
 ---
 
 ## 🚀 Roadmap & Pending Features
 
-We've built the foundation, but there's more to come:
-
-- [ ] **Optimistic Updates**: Update the UI immediately before the server responds, with automatic rollback on error.
-- [ ] **Persistence layer**: Sync the `QueryClient` cache with `localStorage` or `IndexedDB` to persist data across refreshes.
-- [ ] **Window Focus Refetching**: Automatically refresh stale data when the user switches back to the browser tab.
-- [ ] **Infinite Queries**: Support for paginated data and "load more" functionality.
-- [ ] **Background Polling**: Configurable `refetchInterval` to keep data live without user interaction.
-- [ ] **DevTools Integration**: A custom UI overlay to inspect the current state of the cache.
-- [ ] **Retry Logic**: Automatically retry failed requests with exponential backoff.
+- [ ] **Optimistic Updates**: Update the UI immediately before the server responds.
+- [ ] **Persistence layer**: Sync the `QueryClient` cache with `localStorage`.
+- [ ] **Window Focus Refetching**: Refresh stale data when returning to the tab.
+- [ ] **Infinite Queries**: Support for paginated data.
+- [ ] **DevTools Integration**: A custom UI to inspect the cache state.
 
 ---
 
@@ -59,6 +98,3 @@ We've built the foundation, but there's more to come:
    ```bash
    npm run dev
    ```
-
-3. **Explore the Lab**:
-   Use the **Create Post Form** to see real-time cache invalidation in action.
