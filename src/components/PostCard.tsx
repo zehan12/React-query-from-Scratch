@@ -1,12 +1,6 @@
 import React from 'react';
 import { useMutation, useQueryClient } from '../lib';
-import { postsService } from '../services/postsService';
-
-interface Post {
-  id: number;
-  name: string;
-  description: string;
-}
+import { postsService, type Post } from '../services/postsService';
 
 export const PostCard: React.FC<{ post: Post }> = ({ post }) => {
   const queryClient = useQueryClient();

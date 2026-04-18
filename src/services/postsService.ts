@@ -1,5 +1,11 @@
+export interface Post {
+  id: number;
+  name: string;
+  description: string;
+}
+
 // Local mock DB to demonstrate persistence and mutations
-let posts = [
+let posts: Post[] = [
   { id: 1, name: 'Building React Query', description: 'A deep dive into state management.' },
   { id: 2, name: 'TypeScript Magic', description: 'Leveraging types for cleaner code.' },
   { id: 3, name: 'Vite Speed', description: 'Why Vite is the future of frontend tooling.' },
@@ -7,7 +13,7 @@ let posts = [
 ];
 
 export const postsService = {
-  getPosts: async () => {
+  getPosts: async (): Promise<Post[]> => {
     console.log('📡 [Service] Fetching posts...');
     return new Promise((resolve) => {
       setTimeout(() => resolve([...posts]), 800);

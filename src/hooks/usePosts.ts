@@ -1,8 +1,8 @@
 import { useQuery } from '../lib';
-import { postsService } from '../services/postsService';
+import { postsService, type Post } from '../services/postsService';
 
 export const usePosts = () => {
-  return useQuery({
+  return useQuery<Post[]>({
     queryKey: ['postsData'],
     queryFn: postsService.getPosts,
     staleTime: 5000,

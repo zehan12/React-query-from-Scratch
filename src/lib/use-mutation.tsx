@@ -1,14 +1,14 @@
 import { useState, useCallback } from 'react';
 import type { MutationState } from './types';
 
-export const useMutation = ({
+export const useMutation = <TData = unknown, TError = unknown, TVariables = void>({
   mutationFn,
   onSuccess,
 }: {
-  mutationFn: (variables: unknown) => Promise<unknown>;
-  onSuccess?: (data: unknown) => void;
+  mutationFn: (variables: TVariables) => Promise<TData>;
+  onSuccess?: (data: TData) => void;
 }) => {
-  const [state, setState] = useState<MutationState>({
+  const [state, setState] = useState<MutationState<TData, TError>>({
     status: 'idle',
     data: undefined,
     error: undefined,
@@ -16,7 +16,7 @@ export const useMutation = ({
   });
 
   const mutate = useCallback(
-    async (variables: unknown) => {
+    async (variables: TVariables) => {
       setState({ status: 'pending', data: undefined, error: undefined, isPending: true });
 
       try {
@@ -24,7 +24,7 @@ export const useMutation = ({
         setState({ status: 'success', data, error: undefined, isPending: false });
         if (onSuccess) onSuccess(data);
         return data;
-      } catch (error: unknown) {
+      } catch (error: any) {
         setState({ status: 'error', data: undefined, error, isPending: false });
         throw error;
       }

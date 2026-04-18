@@ -1,13 +1,13 @@
 import type { Query } from './types';
 
-export const createQuery = ({
+export const createQuery = <TData = unknown, TError = unknown>({
     queryKey,
     queryFn,
 }: {
     queryKey: unknown[];
-    queryFn: () => Promise<unknown>;
-}): Query => {
-    const query: Query = {
+    queryFn: () => Promise<TData>;
+}): Query<TData, TError> => {
+    const query: Query<TData, TError> = {
         queryKey,
         queryHash: JSON.stringify(queryKey),
         state: {
@@ -52,7 +52,7 @@ export const createQuery = ({
                         data,
                         lastUpdated: Date.now(),
                     }));
-                } catch (error) {
+                } catch (error: any) {
                     query.setState((old) => ({
                         ...old,
                         status: 'error',

@@ -2,20 +2,20 @@ import { createQuery } from './createQuery';
 import type { Query } from './types';
 
 export class QueryClient {
-    private queries: Map<string, Query> = new Map();
+    private queries: Map<string, Query<any, any>> = new Map();
 
-    getQuery = ({
+    getQuery = <TData = unknown, TError = unknown>({
         queryKey,
         queryFn,
     }: {
         queryKey: unknown[];
-        queryFn: () => Promise<unknown>;
-    }): Query => {
+        queryFn: () => Promise<TData>;
+    }): Query<TData, TError> => {
         const queryHash = JSON.stringify(queryKey);
-        let query = this.queries.get(queryHash);
+        let query = this.queries.get(queryHash) as Query<TData, TError> | undefined;
 
         if (!query) {
-            query = createQuery({ queryKey, queryFn });
+            query = createQuery<TData, TError>({ queryKey, queryFn });
             this.queries.set(queryHash, query);
         }
 

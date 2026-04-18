@@ -1,6 +1,7 @@
 import React from 'react';
 import { usePosts } from '../hooks/usePosts';
 import { PostCard } from './PostCard';
+import type { Post } from '../services/postsService';
 
 interface PostListProps {
   title: string;
@@ -23,11 +24,11 @@ export const PostList: React.FC<PostListProps> = ({ title }) => {
         </div>
       ) : error ? (
         <div className="error-state">
-          <p>❌ Error loading posts: {(error as unknown as { message: string }).message}</p>
+          <p>❌ Error loading posts: {(error as { message: string }).message}</p>
         </div>
       ) : (
         <div className="post-list">
-          {(data as unknown[])?.map((post: { id: number, name: string, description: string }) => (
+          {data?.map((post: Post) => (
             <PostCard key={post.id} post={post} />
           ))}
         </div>
